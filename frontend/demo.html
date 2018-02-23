@@ -311,9 +311,10 @@ become invisible`;
 
       function nextWord() {
         clearTimeout(charTimeout);
-        movePointer(reader.words[reader.index]);
+        let word = reader.words[reader.index];
+        movePointer(word);
         reader.index = Math.max(Math.min(reader.index + dir, reader.length), 0);
-        charTimeout = setTimeout(nextWord, 60000 / wpm / reader.words[reader.index].ratio);
+        charTimeout = setTimeout(nextWord, 60000 / wpm / word.ratio);
       }
 
       window.addEventListener('keydown', e => {
