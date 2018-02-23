@@ -96,6 +96,7 @@
         position: absolute;
         top: calc(50%);
         transform: translate(-50%, -2em);
+        transition: left .1s ease;
       }
     </style>
   </head>
@@ -270,15 +271,17 @@ become invisible`;
         msg.style.left = (msgX - orpX - orpWidth / 2 + msgWidth / 2) + 'px';
       }
 
+      let reader;
+
       // Creates the speedreader dom
       function createSpeedReader(text) {
         let words = parseText(text);
         let container = makeElem('div', {class: 'reader-container'}, 
           makeElem('div', {class: 'reader-doc'},
             makeElem('div', {class: 'reader-doc-body'},
-              ...words.map((w) => {
+              ...words.map((w, i) => {
                 w.elem = makeElem('span', {class: 'reader-doc-word'}, orpSpan(w.word));
-                w.elem.addEventListener('click', () => movePointer(w), false);
+                w.elem.addEventListener('click', () => {movePointer(w); reader.index = i;}, false);
                 return w.elem;
               })
             ),
@@ -297,7 +300,7 @@ become invisible`;
           index: 0,
         };
       }
-      let reader = createSpeedReader(potter + potter);
+      reader = createSpeedReader(potter + potter);
       document.body.appendChild(reader.container);
       movePointer(reader.words[0]);
       const wpm = 450;
