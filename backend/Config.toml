@@ -1,3 +1,0 @@
-[feeds]
-url = "http://www.wuxiaworld.com/category/de-chapter-release/feed/"
-regex="http://www.wuxiaworld.com/new-de-chapters-released-book-(d+)-chapters-(d+)-(d+)/"

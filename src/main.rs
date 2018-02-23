@@ -1,18 +1,20 @@
 extern crate regex;
 extern crate reqwest;
+extern crate rss;
 extern crate scraper;
 #[macro_use]
 extern crate serde_derive;
 extern crate toml;
 
 use std::fs::File;
-use std::io::{Read};
+use std::io::{Read, Write};
 use regex::Regex;
-use scraper::{Html};
+use rss::Channel;
+use scraper::Html;
 
 #[derive(Deserialize)]
 struct Config {
-  feeds: Vec<Feed>
+  feeds: Vec<Feed>,
 }
 
 #[derive(Deserialize)]
@@ -38,19 +40,40 @@ fn get_req(uri: &str) -> Result<String, reqwest::Error> {
   Ok(reqwest::get(uri)?.text()?)
 }
 
+fn write_tracker<T: std::string::ToString>(path: &str, index: T) {
+  let f = &mut File::create(path).expect(format!("Error creating {}", path).as_ref());
+  f.write(index.to_string().as_bytes().as_ref())
+    .expect(format!("Error writing to {}", path).as_ref());
+  f.sync_all().expect("Error syncing to disk");
+}
+
+fn read_tracker(path: &str) -> i32 {
+  if let Ok(mut f) = File::open(path) {
+    let mut buf = Vec::new();
+    f.read_to_end(&mut buf)
+      .expect(format!("Error reading {}", path).as_ref());
+    if let Ok(res) = String::from_utf8(buf).unwrap().parse::<i32>() {
+      res
+    } else {
+      -1
+    }
+  } else {
+    -1
+  }
+}
+
 fn main() {
   let conf: Config = read_config();
 
-  for feed in &conf {
-    let index_regex = Regex::new(conf.feed.regex.as_ref()).expect("Invalid feed regex");
-
-    loop {
-      
-      
-      
-    }
+  for feed in &conf.feeds {
+    
+    let index_regex = Regex::new(feed.regex.as_ref()).expect("Invalid feed regex");
+    let last = read_tracker(feed.tracker.as_ref());
+    let xml = Channel::from_url(&feed.url).unwrap();
+    let first_link = xml.items()[0].link().unwrap();
+    
+    println!("{}\n {}\n {:?}", index_regex, last, first_link);
     
   }
-  
-  println!("{} {}", conf.feeds[0].url, index_regex);
+
 }
