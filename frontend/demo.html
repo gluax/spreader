@@ -93,6 +93,17 @@
         width: 350px;
       }
 
+      .reader-box::after {
+        position: absolute;
+        content: '';
+        width: 4px;
+        height: 100%;
+        left: calc(50% - 2px);
+        right: 0;
+        background: linear-gradient(#ddd, #fff 30%, #fff 70%, #ddd);
+        z-index: -1;
+      }
+
       .reader-box-container {
         position: relative;
       }
@@ -188,7 +199,7 @@ become invisible`;
         let lastChar = word.slice(-1);
         // How much slower a word should be based on each punctuation mark
         let punctuationRatios = {
-          '.': 0.3,
+          '.': 0.4,
           '?': 0.5,
           '!': 0.5,
           ',': 0.5,
@@ -318,14 +329,18 @@ become invisible`;
       function createSpeedReader(text) {
         let paragraphs = text.map(parseText);
         let i = 0;
+        let paragraphIndex = 0;
         let container = makeElem('div', {class: 'reader-container'}, 
           makeElem('div', {class: 'reader-doc'},
             makeElem('div', {class: 'reader-doc-page'},
-              ...paragraphs.map(words =>
+              ...paragraphs.map((words, p) =>
                 makeElem('div', {class: 'reader-doc-paragraph'},
                   ...words.map(w => {
+                    const index = i;
+                    w.index = i++;
+                    w.paragraph = p;
                     w.elem = makeElem('span', {class: 'reader-doc-word'}, orpSpan(w.word));
-                    w.elem.addEventListener('click', () => {movePointer(w); reader.index = i++;}, false);
+                    w.elem.addEventListener('click', () => {movePointer(w); reader.index = index;}, false);
                     return w.elem;
                   }),
                 ),
