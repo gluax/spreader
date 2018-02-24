@@ -1,30 +1,93 @@
-extern crate regex;
+//extern crate regex;
 extern crate reqwest;
 extern crate rss;
 extern crate scraper;
+extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate toml;
 
 use std::fs::File;
 use std::io::{Read, Write};
-use regex::Regex;
-use rss::Channel;
+//use regex::Regex;
+//use rss::Channel;
 use scraper::Html;
+use serde::Deserialize;
+use serde::de::Deserializer;
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Config {
-  feeds: Vec<Feed>,
+  feed: Vec<Feed>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, Debug)]
 struct Feed {
-  url: String,
-  chapter_regex: String,
+  feed_url: String,
+  feed_type: String,
   tracker: String,
-  page_selector: String,
-  link_selector: String,
-  text_selector: String,
+  output_path: String,
+  task: Vec<Task>,
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum Action {
+  ReadFeed,
+  OpenHome,
+  FindChapUrls,
+  FilterUrls,
+  GetFilenameAndOpenChapter,
+  ChapterToFileFormat,
+  WriteToFile,
+}
+
+fn deserialize_action<'de, D>(deserializer: D) -> Result<Action, D::Error> where D: Deserializer<'de> {
+  let s = String::deserialize(deserializer)?;
+
+  match s.as_ref() {
+    "read feed" => Ok(Action::ReadFeed),
+    "open chapter homepage" => Ok(Action::OpenHome),
+    "find chapter urls" => Ok(Action::FindChapUrls),
+    "filter out bad urls" => Ok(Action::FilterUrls),
+    "get filename and open chapter link" => Ok(Action::GetFilenameAndOpenChapter),
+    "get chapter content to file format" => Ok(Action::ChapterToFileFormat),
+    "write to file" => Ok(Action::WriteToFile),
+    _ => Err(serde::de::Error::custom("Error trying to deserialize Action policy config"))
+  }
+}
+
+#[derive(Deserialize, Debug)]
+#[serde(untagged)]
+enum TaskType {
+  Dom,
+  File,
+  Text,
+}
+
+fn deserialize_tasktype<'de, D>(deserializer: D) -> Result<TaskType, D::Error> where D: Deserializer<'de> {
+  let s = String::deserialize(deserializer)?;
+
+  match s.as_ref() {
+    "dom" => Ok(TaskType::Dom),
+    "file" => Ok(TaskType::File),
+    "text" => Ok(TaskType::Text),
+    _ => Err(serde::de::Error::custom("Error trying to deserialize TaskType policy config"))
+  }
+}
+
+#[derive(Deserialize, Debug)]
+struct Task {
+  #[serde(deserialize_with="deserialize_action")]
+  name: Action,
+  #[serde(deserialize_with="deserialize_tasktype")]
+  task_type: TaskType, //turn this into an enum
+  selector: Option<String>,
+  selector_attr: Option<String>,
+  selector_body: Option<bool>,
+  filter: Option<String>,
+  open_url: Option<bool>,
+  match_filename: Option<String>,
+  output_concat: Option<String>,
 }
 
 fn read_config() -> Config {
@@ -65,35 +128,11 @@ fn read_tracker(path: &str) -> i32 {
   }
 }
 
-fn format<'a>(read: &'a mut str, re: Regex, link: &str) -> &'a str {
-  let mut pos:usize = 0;
- 
-  for capture in re.captures_iter(link) {
-    println!("{}", read.replacen("replace", &capture[pos], 1));
-    println!("re: {}", read);
-    pos += 1;
-  }
-
-  read
-  
-}
-
 fn main() {
   let conf: Config = read_config();
 
-  for feed in &conf.feeds {
-    
-    let index_regex = Regex::new(feed.regex.as_ref()).expect("Invalid feed regex");
-    let last = read_tracker(feed.tracker.as_ref());
-    let xml = Channel::from_url(&feed.url).unwrap();
-    let first_link = xml.items()[0].link().unwrap();
-    
-    //let mut text = get_req(format(feed.link, index_regex, first_link)).unwrap();
-    
-    
-    
-    println!("{}\n {}\n {:?}", index_regex, last, first_link);
-    println!("reformated: {}", format(read, index_regex, first_link));
+  for feed in &conf.feed {
+    println!("feed: {:?}", feed);
     
   }
 
