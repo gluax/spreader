@@ -22,4 +22,4 @@
         type = "text"
         selector = "div[itemprop=\"articleBody\"] p"
         selector_body = true
-        
+        output_concat = "\n"

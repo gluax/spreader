@@ -20,8 +20,11 @@ struct Config {
 #[derive(Deserialize)]
 struct Feed {
   url: String,
-  regex: String,
+  chapter_regex: String,
   tracker: String,
+  page_selector: String,
+  link_selector: String,
+  text_selector: String,
 }
 
 fn read_config() -> Config {
@@ -62,6 +65,19 @@ fn read_tracker(path: &str) -> i32 {
   }
 }
 
+fn format<'a>(read: &'a mut str, re: Regex, link: &str) -> &'a str {
+  let mut pos:usize = 0;
+ 
+  for capture in re.captures_iter(link) {
+    println!("{}", read.replacen("replace", &capture[pos], 1));
+    println!("re: {}", read);
+    pos += 1;
+  }
+
+  read
+  
+}
+
 fn main() {
   let conf: Config = read_config();
 
@@ -72,7 +88,12 @@ fn main() {
     let xml = Channel::from_url(&feed.url).unwrap();
     let first_link = xml.items()[0].link().unwrap();
     
+    //let mut text = get_req(format(feed.link, index_regex, first_link)).unwrap();
+    
+    
+    
     println!("{}\n {}\n {:?}", index_regex, last, first_link);
+    println!("reformated: {}", format(read, index_regex, first_link));
     
   }
 
