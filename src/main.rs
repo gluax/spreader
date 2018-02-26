@@ -10,8 +10,8 @@ extern crate toml;
 use std::fs::File;
 use std::io::{Read, Write};
 //use regex::Regex;
-//use rss::Channel;
-use scraper::Html;
+use rss::Channel;
+use scraper::{Html, Selector};
 use serde::Deserialize;
 use serde::de::Deserializer;
 
@@ -57,7 +57,7 @@ fn deserialize_action<'de, D>(deserializer: D) -> Result<Action, D::Error> where
 }
 
 #[derive(Deserialize, Debug)]
-#[serde(untagged)]
+  #[serde(untagged)]
 enum TaskType {
   Dom,
   File,
@@ -128,12 +128,31 @@ fn read_tracker(path: &str) -> i32 {
   }
 }
 
+
+fn read_feed(url: &str, tracker_path: &str, task: &Task) -> String {
+  //read date and confirm its greater than current feed object date
+  let last_update = read_tracker(tracker_path);
+  
+  let feed_content = Channel::from_url(url).unwrap();
+
+  for channel in feed_content.items() {
+    let chapter_pub_date = channel.pub_date().unwrap();
+    println!("{:?} {}", channel.link(), chapter_pub_date);
+  }
+  
+  //if it is call action on each of them finishing task cahin
+  let s: String = "cry".to_string();
+  return s;
+}
+
 fn main() {
   let conf: Config = read_config();
 
   for feed in &conf.feed {
-    println!("feed: {:?}", feed);
     
+    
+    println!("feed: {:?}", feed);
+    read_feed(feed.feed_url.as_ref(), feed.tracker.as_ref(), &feed.task[0]);
   }
 
 }
