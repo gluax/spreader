@@ -1,3 +1,4 @@
+extern crate chrono;
 //extern crate regex;
 extern crate reqwest;
 extern crate rss;
@@ -7,6 +8,7 @@ extern crate serde;
 extern crate serde_derive;
 extern crate toml;
 
+use chrono::prelude::*;
 use std::fs::File;
 use std::io::{Read, Write};
 //use regex::Regex;
@@ -95,7 +97,7 @@ fn read_config() -> Config {
   let mut buf = Vec::new();
   conf.read_to_end(&mut buf).expect("Error reading config");
 
-  return toml::from_str(String::from_utf8(buf).unwrap().as_ref()).expect("Invalid Config Format");
+  toml::from_str(String::from_utf8(buf).unwrap().as_ref()).expect("Invalid Config Format")
 }
 
 fn open_url(url: &str) -> Result<Html, reqwest::Error> {
@@ -113,43 +115,62 @@ fn write_tracker<T: std::string::ToString>(path: &str, index: T) {
   f.sync_all().expect("Error syncing to disk");
 }
 
-fn read_tracker(path: &str) -> i32 {
+fn read_tracker(path: &str) -> String {
   if let Ok(mut f) = File::open(path) {
     let mut buf = Vec::new();
     f.read_to_end(&mut buf)
       .expect(format!("Error reading {}", path).as_ref());
-    if let Ok(res) = String::from_utf8(buf).unwrap().parse::<i32>() {
+    if let Ok(mut res) = String::from_utf8(buf) {
+      res.pop();
       res
     } else {
-      -1
+      "invalid datetime".to_string()
     }
   } else {
-    -1
+    "failed to open path".to_string()
   }
 }
 
-
-fn read_feed(url: &str, tracker_path: &str, task: &Task) -> String {
-  //read date and confirm its greater than current feed object date
-  let last_update = read_tracker(tracker_path);
+fn read_feed(url: &str, tracker_path: &str, task: &Task) -> Vec<String> {
+  //read last date from tracker file
+  let last_update = DateTime::parse_from_rfc2822(&read_tracker(tracker_path)).unwrap().with_timezone(&FixedOffset::east(0));
   
+  //read the feed url content
   let feed_content = Channel::from_url(url).unwrap();
-
-  for channel in feed_content.items() {
-    let chapter_pub_date = channel.pub_date().unwrap();
-    println!("{:?} {}", channel.link(), chapter_pub_date);
-  }
   
+  //for each item in feed see if the date of the chapters are greater than our date
+  let mut links: Vec<String> = Vec::new();
+  for channel in feed_content.items() {
+    //grab latest chapter as date
+    let chapter_pub_date = DateTime::parse_from_rfc2822(channel.pub_date().unwrap()).unwrap();
+    //if latest chapter date is newer 
+    if chapter_pub_date > last_update {
+      //perform next task on url || return list of them? 
+      println!("pubDate: {:?}, Chapter: {}", chapter_pub_date, channel.title().unwrap());
+      links.push(channel.link().unwrap().to_string());
+    }
+    open_chap_home(&links[0]);
+  }
+
+  fn open_chap_home(url: &str) -> scraper::Html {
+    open_url(url).unwrap()
+  }
+
+  fn find_chap_urls(dom: scraper::Html) -> String {
+    let selector = Selector::parse("div[itemprop=\"articleBody\"] p a").unwrap();
+    for e in dom.select(&selector) {
+          println!("ele: {:?}", e.value());
+    }
+    "fuck".to_string()
+  }
   //if it is call action on each of them finishing task cahin
-  let s: String = "cry".to_string();
-  return s;
+  println!("{:?}", links);
+  links
 }
 
 fn main() {
   let conf: Config = read_config();
-
   for feed in &conf.feed {
-    
     
     println!("feed: {:?}", feed);
     read_feed(feed.feed_url.as_ref(), feed.tracker.as_ref(), &feed.task[0]);

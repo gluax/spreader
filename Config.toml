@@ -7,8 +7,6 @@
     [[feed.task]]
         name = "read feed"
         task_type = "text"
-        selector = "link"
-        selector_body = true
         
     [[feed.task]]
         name = "open chapter homepage"
