@@ -31,7 +31,7 @@ struct Feed {
   task: Vec<Task>,
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 #[serde(untagged)]
 enum Action {
   ReadFeed,
@@ -58,7 +58,7 @@ fn deserialize_action<'de, D>(deserializer: D) -> Result<Action, D::Error> where
   }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
   #[serde(untagged)]
 enum TaskType {
   Dom,
@@ -77,7 +77,7 @@ fn deserialize_tasktype<'de, D>(deserializer: D) -> Result<TaskType, D::Error> w
   }
 }
 
-#[derive(Deserialize, Debug)]
+#[derive(Clone, Deserialize, Debug)]
 struct Task {
   #[serde(deserialize_with="deserialize_action")]
   name: Action,
@@ -131,7 +131,9 @@ fn read_tracker(path: &str) -> String {
   }
 }
 
-fn read_feed(url: &str, tracker_path: &str, tasks: &Vec<Task>) {
+fn read_feed(url: &str, output_path: &str, tracker_path: &str, tasks: &mut Vec<Task>) {
+  let (_, tasks) = tasks.split_at_mut(1);
+  
   //read last date from tracker file
   let last_update = DateTime::parse_from_rfc2822(&read_tracker(tracker_path)).unwrap().with_timezone(&FixedOffset::east(0));
   
@@ -146,59 +148,66 @@ fn read_feed(url: &str, tracker_path: &str, tasks: &Vec<Task>) {
     if chapter_pub_date > last_update {
       //perform next task on url || return list of them? 
       println!("pubDate: {:?}, Chapter: {}", chapter_pub_date, channel.title().unwrap());
-      open_chap_home(&channel.link().unwrap(), tasks);
+      open_chap_home(&channel.link().unwrap(), output_path, &mut tasks.to_vec());
     } 
   }
   
 }
 
-fn open_chap_home(url: &str, tasks: &Vec<Task>)  {
-  find_chap_urls(open_url(url).unwrap(), tasks);
+fn open_chap_home(url: &str, output_path: &str, tasks: &mut Vec<Task>)  {
+  let (task, tasks) = tasks.split_at_mut(1);
+  
+  if task[0].open_url.unwrap() {
+    find_chap_urls(output_path, open_url(url).unwrap(), &mut tasks.to_vec());
+  }
 }
 
-fn find_chap_urls(dom: scraper::Html, tasks: &Vec<Task>) {
-  let selector = Selector::parse("div[itemprop=\"articleBody\"] p a").unwrap();
+fn find_chap_urls(output_path: &str, dom: scraper::Html, tasks: &mut Vec<Task>) {
+  let (task, tasks) = tasks.split_at_mut(1);
+  let selector = Selector::parse(&task[0].clone().selector.unwrap()).unwrap();
   
   for e in dom.select(&selector) {
-    filter_urls(e.value().attr("href").unwrap(), tasks);
+    filter_urls(e.value().attr(&task[0].clone().selector_attr.unwrap()).unwrap(), output_path, &mut tasks.to_vec());
   }
 }
 
-fn filter_urls(url: &str, tasks: &Vec<Task>) {
-  let filter = Regex::new("http://www\\.wuxiaworld\\.com/desolate-era-index/de-book-").unwrap();
+fn filter_urls(url: &str, output_path: &str, tasks: &mut Vec<Task>) {
+  let (task, tasks) = tasks.split_at_mut(1);
+  let filter = Regex::new(&task[0].clone().filter.unwrap()).unwrap();
 
   if filter.is_match(url) {
-    println!("url: {}", url);
-    get_filename_and_open_link(url, tasks);
+    get_filename_and_open_link(url, output_path, &mut tasks.to_vec());
   }
 }
 
-fn get_filename_and_open_link(url: &str, tasks: &Vec<Task>) {
-  let match_filename = Regex::new("de-book-[^/]+").unwrap();
+fn get_filename_and_open_link(url: &str, output_path: &str, tasks: &mut Vec<Task>) {
+  let (task, _) = tasks.split_at_mut(1);
+  let match_filename = Regex::new(&task[0].clone().match_filename.unwrap()).unwrap();
+  
   let mat = match_filename.find(url).unwrap();
   let filename = &url[mat.start()..];
-  println!("filename: {:?}", filename);
+  
   let dom = open_url(url).unwrap();
-  get_chapter_content_to_file_format(filename, dom, tasks);
+  get_chapter_content_to_file_format(filename, output_path, dom);
 }
 
-fn get_chapter_content_to_file_format(filename: &str, dom: scraper::Html, tasks: &Vec<Task>) {
+fn get_chapter_content_to_file_format(filename: &str, output_path: &str, dom: scraper::Html) {
+
   let selector = Selector::parse("div[itemprop=\"articleBody\"] p").unwrap();
-  let mut chapters: Vec<String> = Vec::new();
+  let mut chapter_paras: Vec<String> = Vec::new();
   
   for content in dom.select(&selector) {
-    chapters.push(content.inner_html());
+    chapter_paras.push(content.inner_html());
   }
 
-  println!("content: {:?}", chapters);
 }
 
 fn main() {
   let conf: Config = read_config();
   for feed in &conf.feed {
-    
+    let mut tasks = feed.task.clone();
     println!("feed: {:?}", feed);
-    read_feed(feed.feed_url.as_ref(), feed.tracker.as_ref(), &feed.task);
+    read_feed(feed.feed_url.as_ref(), feed.output_path.as_ref(), feed.tracker.as_ref(), &mut tasks);
   }
 
 }
