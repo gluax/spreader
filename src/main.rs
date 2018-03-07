@@ -1,5 +1,5 @@
 extern crate chrono;
-//extern crate regex;
+extern crate regex;
 extern crate reqwest;
 extern crate rss;
 extern crate scraper;
@@ -11,7 +11,7 @@ extern crate toml;
 use chrono::prelude::*;
 use std::fs::File;
 use std::io::{Read, Write};
-//use regex::Regex;
+use regex::Regex;
 use rss::Channel;
 use scraper::{Html, Selector};
 use serde::Deserialize;
@@ -131,7 +131,7 @@ fn read_tracker(path: &str) -> String {
   }
 }
 
-fn read_feed(url: &str, tracker_path: &str, task: &Task) -> Vec<String> {
+fn read_feed(url: &str, tracker_path: &str, tasks: &Vec<Task>) {
   //read last date from tracker file
   let last_update = DateTime::parse_from_rfc2822(&read_tracker(tracker_path)).unwrap().with_timezone(&FixedOffset::east(0));
   
@@ -139,7 +139,6 @@ fn read_feed(url: &str, tracker_path: &str, task: &Task) -> Vec<String> {
   let feed_content = Channel::from_url(url).unwrap();
   
   //for each item in feed see if the date of the chapters are greater than our date
-  let mut links: Vec<String> = Vec::new();
   for channel in feed_content.items() {
     //grab latest chapter as date
     let chapter_pub_date = DateTime::parse_from_rfc2822(channel.pub_date().unwrap()).unwrap();
@@ -147,25 +146,51 @@ fn read_feed(url: &str, tracker_path: &str, task: &Task) -> Vec<String> {
     if chapter_pub_date > last_update {
       //perform next task on url || return list of them? 
       println!("pubDate: {:?}, Chapter: {}", chapter_pub_date, channel.title().unwrap());
-      links.push(channel.link().unwrap().to_string());
-    }
-    open_chap_home(&links[0]);
+      open_chap_home(&channel.link().unwrap(), tasks);
+    } 
+  }
+  
+}
+
+fn open_chap_home(url: &str, tasks: &Vec<Task>)  {
+  find_chap_urls(open_url(url).unwrap(), tasks);
+}
+
+fn find_chap_urls(dom: scraper::Html, tasks: &Vec<Task>) {
+  let selector = Selector::parse("div[itemprop=\"articleBody\"] p a").unwrap();
+  
+  for e in dom.select(&selector) {
+    filter_urls(e.value().attr("href").unwrap(), tasks);
+  }
+}
+
+fn filter_urls(url: &str, tasks: &Vec<Task>) {
+  let filter = Regex::new("http://www\\.wuxiaworld\\.com/desolate-era-index/de-book-").unwrap();
+
+  if filter.is_match(url) {
+    println!("url: {}", url);
+    get_filename_and_open_link(url, tasks);
+  }
+}
+
+fn get_filename_and_open_link(url: &str, tasks: &Vec<Task>) {
+  let match_filename = Regex::new("de-book-[^/]+").unwrap();
+  let mat = match_filename.find(url).unwrap();
+  let filename = &url[mat.start()..];
+  println!("filename: {:?}", filename);
+  let dom = open_url(url).unwrap();
+  get_chapter_content_to_file_format(filename, dom, tasks);
+}
+
+fn get_chapter_content_to_file_format(filename: &str, dom: scraper::Html, tasks: &Vec<Task>) {
+  let selector = Selector::parse("div[itemprop=\"articleBody\"] p").unwrap();
+  let mut chapters: Vec<String> = Vec::new();
+  
+  for content in dom.select(&selector) {
+    chapters.push(content.inner_html());
   }
 
-  fn open_chap_home(url: &str) -> scraper::Html {
-    open_url(url).unwrap()
-  }
-
-  fn find_chap_urls(dom: scraper::Html) -> String {
-    let selector = Selector::parse("div[itemprop=\"articleBody\"] p a").unwrap();
-    for e in dom.select(&selector) {
-          println!("ele: {:?}", e.value());
-    }
-    "fuck".to_string()
-  }
-  //if it is call action on each of them finishing task cahin
-  println!("{:?}", links);
-  links
+  println!("content: {:?}", chapters);
 }
 
 fn main() {
@@ -173,7 +198,7 @@ fn main() {
   for feed in &conf.feed {
     
     println!("feed: {:?}", feed);
-    read_feed(feed.feed_url.as_ref(), feed.tracker.as_ref(), &feed.task[0]);
+    read_feed(feed.feed_url.as_ref(), feed.tracker.as_ref(), &feed.task);
   }
 
 }
