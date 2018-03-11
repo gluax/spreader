@@ -1,43 +1,58 @@
 [[feed]]
-    feed_url = "http://www.wuxiaworld.com/category/de-chapter-release/feed/"
-    feed_type = "file"
-    tracker = "feeds/last_de"
-    output_path = "books/de/"
+  feed_url = "http://www.wuxiaworld.com/feed/chapters/desolate-era"
+  feed_type = "file"
+  tracker = "feeds/last_de"
+  output_path = "books/de/" 
 
-    [[feed.task]]
-        name = "read feed"
-        task_type = "text"
-        
-    [[feed.task]]
-        name = "open chapter homepage"
-        task_type = "dom"
-        open_url = true
-        
-    [[feed.task]]
-        name = "find chapter urls"
-        task_type = "text"
-        selector = "div[itemprop=\"articleBody\"] p a"
-        selector_attr = "href"
-        
-    [[feed.task]]
-        name = "filter out bad urls"
-        task_type = "text"
-        filter = "http://www\\.wuxiaworld\\.com/desolate-era-index/de-book-"
+  [[feed.task]]
+      name = "read feed"
+      task_type = "text"
 
-    [[feed.task]]
-        name = "get filename and open chapter link"
-        task_type = "dom"
-        match_filename = "de-book-[^/]+" # takes input matches regex
-        open_url = true
+   [[feed.task]]
+      name = "open chapter homepage"
+      task_type = "dom"
+      open_url = true
+     
+# [[feed]]
+#   feed_url = "http://www.wuxiaworld.com/category/de-chapter-release/feed/"
+#   feed_type = "file"
+#   tracker = "feeds/last_de"
+#   output_path = "books/de/"
 
-    [[feed.task]]
-        name = "get chapter content to file format"
-        task_type = "text"
-        selector = "div[itemprop=\"articleBody\"] p"
-        selector_body = true
-        output_concat = "\n"
+#   [[feed.task]]
+#     name = "read feed"
+#     task_type = "text"
 
-    [[feed.task]]
-        name = "write to file"
-        task_type = "file"
-        
+#   [[feed.task]]
+#     name = "open chapter homepage"
+#     task_type = "dom"
+#     open_url = true
+
+#   [[feed.task]]
+#     name = "find chapter urls"
+#     task_type = "text"
+#     selector = "div[itemprop=\"articleBody\"] p a"
+#     selector_attr = "href"
+
+#   [[feed.task]]
+#     name = "filter out bad urls"
+#     task_type = "text"
+#     filter = "http://www\\.wuxiaworld\\.com/desolate-era-index/de-book-"
+
+#   [[feed.task]]
+#     name = "get filename and open chapter link"
+#     task_type = "dom"
+#     match_filename = "de-book-[^/]+" # takes input matches regex
+#     open_url = true
+
+#   [[feed.task]]
+#     name = "get chapter content to file format"
+#     task_type = "text"
+#     selector = "div[itemprop=\"articleBody\"] p"
+#     selector_body = true
+#     output_concat = "\n"
+
+#   [[feed.task]]
+#     name = "write to file"
+#     task_type = "file"
+
