@@ -59,28 +59,28 @@ fn deserialize_action<'de, D>(deserializer: D) -> Result<ActionType, D::Error> w
 
 #[derive(Clone, Deserialize, Debug)]
 enum TaskType {
-    Dom,
-    File,
-    Text,
+    Dom(String),
+    File(String),
+    Text(String),
 }
 
-fn deserialize_tasktype<'de, D>(deserializer: D) -> Result<TaskType, D::Error> where D: Deserializer<'de> {
-    let s = String::deserialize(deserializer)?;
+// fn deserialize_tasktype<'de, D>(deserializer: D) -> Result<TaskType, D::Error> where D: Deserializer<'de> {
+//     let s = String::deserialize(deserializer)?;
 
-    match s.as_ref() {
-        "dom" => Ok(TaskType::Dom),
-        "file" => Ok(TaskType::File),
-        "text" => Ok(TaskType::Text),
-        _ => Err(serde::de::Error::custom("Error trying to deserialize TaskType policy config"))
-    }
-}
+//     match s.as_ref() {
+//         "dom" => Ok(TaskType::Dom),
+//         "file" => Ok(TaskType::File),
+//         "text" => Ok(TaskType::Text),
+//         _ => Err(serde::de::Error::custom("Error trying to deserialize TaskType policy config"))
+//     }
+// }
 
 #[derive(Clone, Deserialize, Debug)]
 struct Task {
     //#[serde(deserialize_with="deserialize_action")]
     name: String,
-    #[serde(deserialize_with="deserialize_tasktype")]
-    task_type: TaskType, //turn this into an enum
+    //#[serde(deserialize_with="deserialize_tasktype")]
+    task_type: String, //turn this into an enum
     selector: Option<String>,
     selector_attr: Option<String>,
     selector_body: Option<bool>,
@@ -88,6 +88,12 @@ struct Task {
     open_url: Option<bool>,
     match_filename: Option<String>,
     output_concat: Option<String>,
+}
+
+impl Task {
+    fn perform(&self, data: TaskType) -> TaskType {
+        TaskType::Dom("cry".to_string())
+    }
 }
 
 fn read_config() -> Config {
@@ -129,9 +135,12 @@ fn read_tracker(path: &str) -> String {
     }
 }
 
-fn perform_task(name: &str, task: &Task) -> String {
+// so maybe a list of links or dom or etc
+// data the type of what's being passed from previous stuff, task the current task, the list of tasks to still be performed
+fn perform_task(data: TaskType, task: &Task, tasks: &mut Vec<Task>) {
     //somehow do the thing to make it do the right thing
-    "hi".to_string()
+    // task.name tells us what action to do open, filter, write, etc
+    
 }
 
 fn read_feed(url: &str, output_path: &str, tracker_path: &str, tasks: &mut Vec<Task>) {
@@ -210,7 +219,7 @@ fn main() {
     for feed in &conf.feed {
         let mut tasks = feed.task.clone();
         println!("feed: {:?}", feed);
-        perform_task(feed.task[0].name.as_str(), &feed.task[0]);
+        feed.task[0].perform(TaskType::Text(feed.feed_url.clone()));
         read_feed(feed.feed_url.as_ref(), feed.output_path.as_ref(), feed.tracker.as_ref(), &mut tasks);
     }
 
