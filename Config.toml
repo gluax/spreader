@@ -20,7 +20,10 @@
     selector = ".section-content p"
     selector_body = true
     output_concat = "\n"
-    
+
+  [[feed.task]]
+    name = "write to file"
+    task_type = "file"
      
 # [[feed]]
 #   feed_url = "http://www.wuxiaworld.com/category/de-chapter-release/feed/"

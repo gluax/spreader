@@ -12,6 +12,7 @@ use select::document::Document;
 use select::predicate::{Attr, Class, Name, Predicate};
 use chrono::prelude::*;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::{Read, Write};
 use regex::Regex;
 use rss::Channel;
@@ -92,14 +93,17 @@ struct Task {
 impl Task {
     fn perform(&self, output_path: &str, data: Vec<TaskType>, add: Option<Vec<TaskType>>) -> (Vec<TaskType>, Option<Vec<TaskType>>) {
         let mut rsp: Vec<TaskType> = Vec::new();
-        let mut additional: Vec<TaskType> = Vec::new();
+        let mut addi: Vec<TaskType> = Vec::new();
+        if let Some(a) = add {
+            addi = a;
+        }
 
         //for now all tasktypes are hardcoded will fix in future
         if self.name.contains("read feed") {
             rsp = read_feed(data.clone(), "feeds/last_de");
         }
         if self.name.contains("get") {
-            additional = get(data.clone(), &self.clone().match_filename.unwrap());
+            addi = get(data.clone(), &self.clone().match_filename.unwrap());
         }
         if self.name.contains("to file format") {
             rsp = file_format(data.clone(), &self.selector.clone().unwrap(), self.selector_body.clone().unwrap(), &self.output_concat.clone().unwrap())
@@ -107,8 +111,12 @@ impl Task {
         if self.name.contains("open") {
             rsp = open(data.clone(), self.open_url.unwrap())
         }
+        if self.name.contains("write") {
+            println!("should be writing");
+            write_chapter(output_path, data.clone(), addi.clone())
+        }
 
-        (rsp, Some(additional))
+        (rsp, Some(addi))
     }
 }
 
@@ -227,8 +235,21 @@ fn file_format(data: Vec<TaskType>, selector: &str, selector_body: bool, output_
     chapters
 }
 
-fn write(output_path: &str, data: Vec<TaskType>, add: Vec<TaskType>) {
+fn write_chapter(output_path: &str, data: Vec<TaskType>, add: Vec<TaskType>) {
+
+    println!("add: {:?}", add);
     
+    for info in data.iter().zip(add.iter()) {
+        let (chap, file) = info;
+
+        let mut path = output_path.to_owned();
+        path.push_str(&file.clone().text().unwrap().to_owned());
+        
+        let mut file = File::create(path.clone()).expect(format!("Error creating {}", path.clone()).as_ref());
+        file.write_all(chap.clone().text().unwrap().as_bytes()).expect(format!("Error writing to {}", path.clone()).as_ref());
+        file.sync_all().expect("Error syncing to disk");
+
+    }
 }
 
 fn main() {
