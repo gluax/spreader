@@ -2,29 +2,29 @@
   feed_url = "http://www.wuxiaworld.com/feed/chapters/desolate-era"
   feed_type = "file"
   tracker = "feeds/last_de"
-  output_path = "books/de/" 
+  output_path = "books/de/"
 
   [[feed.task]]
     name = "read feed"
-    task_type = "text"
+    feed = true
+
 
   [[feed.task]]
     name = "get chapter title and open chapter page"
     match_filename = "de-book-[^/]+"
-    task_type = "dom"
+    get = true
     open_url = true
 
   [[feed.task]]
     name = "chapter content to file format"
-    task_type = "text"
     selector = ".section-content p"
     selector_body = true
     output_concat = "\n"
 
   [[feed.task]]
     name = "write to file"
-    task_type = "file"
-     
+    write = true
+
 # [[feed]]
 #   feed_url = "http://www.wuxiaworld.com/category/de-chapter-release/feed/"
 #   feed_type = "file"

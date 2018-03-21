@@ -2,22 +2,18 @@ extern crate chrono;
 extern crate regex;
 extern crate reqwest;
 extern crate rss;
+extern crate scraper;
 extern crate serde;
 #[macro_use]
 extern crate serde_derive;
 extern crate toml;
-extern crate select;
 
-use select::document::Document;
-use select::predicate::{Attr, Class, Name, Predicate};
+use scraper::{Html, Selector};
 use chrono::prelude::*;
 use std::fs::File;
-use std::io::prelude::*;
 use std::io::{Read, Write};
 use regex::Regex;
 use rss::Channel;
-//use serde::Deserialize;
-//use serde::de::Deserializer;
 
 #[derive(Deserialize, Debug)]
 struct Config {
@@ -33,26 +29,33 @@ struct Feed {
     task: Vec<Task>,
 }
 
-// #[derive(Debug)]
-// enum ActionType {
-//     ReadFeed,
-//     Open,
-//     Find,
-//     Filter,
-//     Get,
-//     ToFileFormat,
-//     WriteToFile,
-// }
-
 #[derive(Clone, Debug)]
 enum TaskType {
-    Dom(select::document::Document),
+    Dom(Html),
     Feed(rss::Channel),
     Text(String),
 }
 
+impl From<Html> for TaskType {
+    fn from(info: Html) -> Self {
+        TaskType::Dom(info)
+    }
+}
+
+impl From<Channel> for TaskType {
+    fn from(info: Channel) -> Self {
+        TaskType::Feed(info)
+    }
+}
+
+impl From<String> for TaskType {
+    fn from(info: String) -> Self {
+        TaskType::Text(info)
+    }
+}
+
 impl TaskType {
-    fn dom(self) -> Option<select::document::Document> {
+    fn dom(self) -> Option<Html> {
         if let TaskType::Dom(d) = self {
             Some(d)
         } else {
@@ -80,18 +83,26 @@ impl TaskType {
 #[derive(Clone, Deserialize, Debug)]
 struct Task {
     name: String,
-    task_type: String,
     selector: Option<String>,
     selector_attr: Option<String>,
-    selector_body: Option<bool>,
     filter: Option<String>,
-    open_url: Option<bool>,
     match_filename: Option<String>,
     output_concat: Option<String>,
+    open_url: Option<bool>,
+    selector_body: Option<bool>,
+    get: Option<bool>,
+    feed: Option<bool>,
+    write: Option<bool>,
 }
 
 impl Task {
-    fn perform(&self, output_path: &str, data: Vec<TaskType>, add: Option<Vec<TaskType>>) -> (Vec<TaskType>, Option<Vec<TaskType>>) {
+    fn perform(
+        &self,
+        tracker: &str,
+        output_path: &str,
+        data: Vec<TaskType>,
+        add: Option<Vec<TaskType>>,
+    ) -> (Vec<TaskType>, Option<Vec<TaskType>>) {
         let mut rsp: Vec<TaskType> = Vec::new();
         let mut addi: Vec<TaskType> = Vec::new();
         if let Some(a) = add {
@@ -99,20 +110,23 @@ impl Task {
         }
 
         //for now all tasktypes are hardcoded will fix in future
-        if self.name.contains("read feed") {
-            rsp = read_feed(data.clone(), "feeds/last_de");
+        if self.feed.is_some() && self.feed.unwrap() {
+            rsp = read_feed(data.clone(), tracker.clone());
         }
-        if self.name.contains("get") {
+        if self.get.is_some() && self.get.unwrap() {
             addi = get(data.clone(), &self.clone().match_filename.unwrap());
         }
-        if self.name.contains("to file format") {
-            rsp = file_format(data.clone(), &self.selector.clone().unwrap(), self.selector_body.clone().unwrap(), &self.output_concat.clone().unwrap())
+        if self.selector_body.is_some() && self.selector_body.unwrap() {
+            rsp = file_format(
+                data.clone(),
+                &self.selector.clone().unwrap(),
+                &self.output_concat.clone().unwrap(),
+            )
         }
-        if self.name.contains("open") {
-            rsp = open(data.clone(), self.open_url.unwrap())
+        if self.open_url.is_some() && self.open_url.unwrap() {
+            rsp = open(data.clone())
         }
-        if self.name.contains("write") {
-            println!("should be writing");
+        if self.write.is_some() && self.write.unwrap() {
             write_chapter(output_path, data.clone(), addi.clone())
         }
 
@@ -128,8 +142,9 @@ fn read_config() -> Config {
     toml::from_str(String::from_utf8(buf).unwrap().as_ref()).expect("Invalid Config Format")
 }
 
-fn open_url(url: &str) -> Result<select::document::Document, reqwest::Error> {
-    Ok(Document::from(get_req(url)?.as_ref()))
+fn open_url(url: &str) -> Result<Html, reqwest::Error> {
+    //Ok(Document::from(get_req(url)?.as_ref()))
+    Ok(Html::parse_document(get_req(url)?.as_ref()))
 }
 
 fn get_req(uri: &str) -> Result<String, reqwest::Error> {
@@ -159,25 +174,26 @@ fn read_tracker(path: &str) -> String {
     }
 }
 
-fn read_feed(data: Vec<TaskType>, tracker_path: &str) -> Vec<TaskType>{
-    
+fn read_feed(data: Vec<TaskType>, tracker_path: &str) -> Vec<TaskType> {
     //read last date from tracker file
-    let last_update = DateTime::parse_from_rfc2822(&read_tracker(tracker_path)).unwrap().with_timezone(&FixedOffset::east(0));
-    
+    let last_update = DateTime::parse_from_rfc2822(&read_tracker(tracker_path))
+        .unwrap()
+        .with_timezone(&FixedOffset::east(0));
+
     //read the feed url content
     let feed_content = data[0].clone().feed().unwrap();
-    
+
     //for each item in feed see if the date of the chapters are greater than our date
 
     let mut urls: Vec<TaskType> = Vec::new();
     for channel in feed_content.items() {
         let chapter_pub_date = DateTime::parse_from_rfc2822(channel.pub_date().unwrap()).unwrap();
-        //if latest chapter date is newer 
+        //if latest chapter date is newer
         if chapter_pub_date > last_update {
             //perform next task on url || return list of them?
-            urls.push(TaskType::Text(channel.link().unwrap().to_string()));
-            println!("pubDate: {:?}, Chapter: {}", chapter_pub_date, channel.title().unwrap());
-        } 
+            urls.push(TaskType::from(channel.link().unwrap().to_string()));
+            //println!("pubDate: {:?}, Chapter: {}", chapter_pub_date, channel.title().unwrap());
+        }
     }
 
     urls
@@ -186,92 +202,83 @@ fn read_feed(data: Vec<TaskType>, tracker_path: &str) -> Vec<TaskType>{
 fn get(data: Vec<TaskType>, matchers: &str) -> Vec<TaskType> {
     let mut filenames: Vec<TaskType> = Vec::new();
     let matcher = Regex::new(matchers).unwrap();
+
     for ttype in data {
         let link = ttype.clone().text().unwrap();
         let matched = matcher.find(&link).unwrap();
         let filename = link[matched.start()..].to_string();
-        filenames.push(TaskType::Text(filename));
+        filenames.push(TaskType::from(filename));
     }
 
     filenames
 }
 
-fn open(data: Vec<TaskType>, open: bool) -> Vec<TaskType> {
+fn open(data: Vec<TaskType>) -> Vec<TaskType> {
     let mut doms: Vec<TaskType> = Vec::new();
-    
+
     for link in data {
-        if open {
-            let dom = open_url(&link.text().unwrap()).unwrap();
-            //println!("dom: {:?}", dom);
-            doms.push(TaskType::Dom(dom));
-        }
+        let dom = open_url(&link.text().unwrap()).unwrap();
+        //println!("dom: {:?}", dom);
+        doms.push(TaskType::from(dom));
     }
-    
+
     doms
 }
 
-fn file_format(data: Vec<TaskType>, selector: &str, selector_body: bool, output_concat: &str) -> Vec<TaskType> {
+fn file_format(data: Vec<TaskType>, selector: &str, output_concat: &str) -> Vec<TaskType> {
     let mut chapters: Vec<TaskType> = Vec::new();
 
     let mut chapter = "".to_owned();
     let concat = output_concat.to_owned();
-    
-    for wdom in data {
-       
-        if selector_body {
-            
-            let dom = wdom.clone().dom().unwrap();
-            // temp harded coded till we write a parser for selector
-            for node in dom.find(Class("section-content").descendant(Name("p"))) {
-                chapter.push_str(&node.text().to_owned());
-                chapter.push_str(&concat);
-            }
 
-            chapters.push(TaskType::Text(chapter.clone()));
-            chapter.clear();
+    let sel = Selector::parse(selector).unwrap();
+
+    for wdom in data {
+        let dom = wdom.clone().dom().unwrap();
+        for chap in dom.select(&sel) {
+            chapter.push_str(&chap.inner_html());
+            chapter.push_str(&concat);
         }
+        chapters.push(TaskType::from(chapter.clone()));
+        chapter.clear();
     }
 
     chapters
 }
 
 fn write_chapter(output_path: &str, data: Vec<TaskType>, add: Vec<TaskType>) {
+    //println!("add: {:?}", add);
 
-    println!("add: {:?}", add);
-    
     for info in data.iter().zip(add.iter()) {
         let (chap, file) = info;
 
         let mut path = output_path.to_owned();
         path.push_str(&file.clone().text().unwrap().to_owned());
-        
-        let mut file = File::create(path.clone()).expect(format!("Error creating {}", path.clone()).as_ref());
-        file.write_all(chap.clone().text().unwrap().as_bytes()).expect(format!("Error writing to {}", path.clone()).as_ref());
-        file.sync_all().expect("Error syncing to disk");
 
+        let mut file =
+            File::create(path.clone()).expect(format!("Error creating {}", path.clone()).as_ref());
+        file.write_all(chap.clone().text().unwrap().as_bytes())
+            .expect(format!("Error writing to {}", path.clone()).as_ref());
+        file.sync_all().expect("Error syncing to disk");
     }
 }
 
 fn main() {
     let conf: Config = read_config();
     for feed in &conf.feed {
-        let mut data: Vec<TaskType> = vec![TaskType::Feed(Channel::from_url(&feed.feed_url).unwrap())];
+        let mut data: Vec<TaskType> =
+            vec![TaskType::Feed(Channel::from_url(&feed.feed_url).unwrap())];
         let mut add: Option<Vec<TaskType>> = None;
-        //let mut tasks = feed.task.clone();
-        //let mut s: &str = &get_req("http://www.wuxiaworld.com/novel/desolate-era/de-book-42-chapter-20").unwrap();
-        //let dom = Document::from(s);
-        //for node in dom.find(Class("section-content").descendant(Name("p"))) {
-            //println!("text: {}", node.text());
-        //}
-        
-        println!("feed: {:?}", feed);
-        
+        let tracker = &feed.tracker.clone();
+        let output_path = &feed.output_path.clone();
+
+        //println!("feed: {:?}", feed);
+
         for task in feed.task.clone() {
-            println!("task: {:?}", task);
-            let rsp = task.perform(&feed.output_path.clone(), data.clone(), add.clone());
+            //println!("task: {:?}", task);
+            let rsp = task.perform(tracker, output_path, data.clone(), add.clone());
             data = rsp.0;
             add = rsp.1;
         }
     }
-
 }
