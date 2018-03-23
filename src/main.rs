@@ -14,6 +14,8 @@ use std::fs::File;
 use std::io::{Read, Write};
 use regex::Regex;
 use rss::Channel;
+use std::cell::RefCell;
+use std::rc::Rc;
 
 #[derive(Deserialize, Debug)]
 struct Config {
@@ -109,25 +111,24 @@ impl Task {
             addi = a;
         }
 
-        //for now all tasktypes are hardcoded will fix in future
-        if self.feed.is_some() && self.feed.unwrap() {
-            rsp = read_feed(data.clone(), tracker.clone());
+        if let Some(true) = self.feed {
+            rsp = read_feed(data.clone(), tracker);
         }
-        if self.get.is_some() && self.get.unwrap() {
+        if let Some(true) = self.get {
             addi = get(data.clone(), &self.clone().match_filename.unwrap());
         }
-        if self.selector_body.is_some() && self.selector_body.unwrap() {
+        if let Some(true) = self.selector_body {
             rsp = file_format(
                 data.clone(),
                 &self.selector.clone().unwrap(),
                 &self.output_concat.clone().unwrap(),
-            )
+            );
         }
-        if self.open_url.is_some() && self.open_url.unwrap() {
-            rsp = open(data.clone())
+        if let Some(true) = self.open_url {
+            rsp = open(data.clone());
         }
-        if self.write.is_some() && self.write.unwrap() {
-            write_chapter(output_path, data.clone(), addi.clone())
+        if let Some(true) = self.write {
+            write_chapter(output_path, data.clone(), addi.clone());
         }
 
         (rsp, Some(addi))
@@ -269,14 +270,14 @@ fn main() {
         let mut data: Vec<TaskType> =
             vec![TaskType::Feed(Channel::from_url(&feed.feed_url).unwrap())];
         let mut add: Option<Vec<TaskType>> = None;
-        let tracker = &feed.tracker.clone();
-        let output_path = &feed.output_path.clone();
+        let tracker = Rc::new(RefCell::new(&feed.tracker));
+        let output_path = Rc::new(RefCell::new(&feed.output_path));
 
         //println!("feed: {:?}", feed);
 
         for task in feed.task.clone() {
             //println!("task: {:?}", task);
-            let rsp = task.perform(tracker, output_path, data.clone(), add.clone());
+            let rsp = task.perform(&tracker.borrow(), &output_path.borrow(), data, add);
             data = rsp.0;
             add = rsp.1;
         }
