@@ -99,7 +99,7 @@ struct Task {
 
 impl Task {
     fn perform(
-        &self,
+        self,
         tracker: &str,
         output_path: &str,
         data: Vec<TaskType>,
@@ -115,13 +115,13 @@ impl Task {
             rsp = read_feed(data.clone(), tracker);
         }
         if let Some(true) = self.get {
-            addi = get(data.clone(), &self.clone().match_filename.unwrap());
+            addi = get(data.clone(), &self.match_filename.unwrap());
         }
         if let Some(true) = self.selector_body {
             rsp = file_format(
                 data.clone(),
-                &self.selector.clone().unwrap(),
-                &self.output_concat.clone().unwrap(),
+                &self.selector.unwrap(),
+                &self.output_concat.unwrap(),
             );
         }
         if let Some(true) = self.open_url {
