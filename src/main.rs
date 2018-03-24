@@ -102,36 +102,26 @@ impl Task {
         self,
         tracker: &str,
         output_path: &str,
-        data: Vec<TaskType>,
-        add: Option<Vec<TaskType>>,
-    ) -> (Vec<TaskType>, Option<Vec<TaskType>>) {
-        let mut rsp: Vec<TaskType> = Vec::new();
-        let mut addi: Vec<TaskType> = Vec::new();
-        if let Some(a) = add {
-            addi = a;
-        }
+        data: &mut Vec<TaskType>,
+        add: &mut Vec<TaskType>,
+    ) {
+        let mut _rsp: Vec<TaskType> = Vec::new();
 
         if let Some(true) = self.feed {
-            rsp = read_feed(data.clone(), tracker);
+            read_feed(data, tracker);
         }
         if let Some(true) = self.get {
-            addi = get(data.clone(), &self.match_filename.unwrap());
+            get(data, add, &self.match_filename.unwrap());
         }
         if let Some(true) = self.selector_body {
-            rsp = file_format(
-                data.clone(),
-                &self.selector.unwrap(),
-                &self.output_concat.unwrap(),
-            );
+            file_format(data, &self.selector.unwrap(), &self.output_concat.unwrap());
         }
         if let Some(true) = self.open_url {
-            rsp = open(data.clone());
+            open(data);
         }
         if let Some(true) = self.write {
-            write_chapter(output_path, data.clone(), addi.clone());
+            write_chapter(output_path, data, add);
         }
-
-        (rsp, Some(addi))
     }
 }
 
@@ -175,7 +165,7 @@ fn read_tracker(path: &str) -> String {
     }
 }
 
-fn read_feed(data: Vec<TaskType>, tracker_path: &str) -> Vec<TaskType> {
+fn read_feed(data: &mut Vec<TaskType>, tracker_path: &str) {
     //read last date from tracker file
     let last_update = DateTime::parse_from_rfc2822(&read_tracker(tracker_path))
         .unwrap()
@@ -185,69 +175,59 @@ fn read_feed(data: Vec<TaskType>, tracker_path: &str) -> Vec<TaskType> {
     let feed_content = data[0].clone().feed().unwrap();
 
     //for each item in feed see if the date of the chapters are greater than our date
-
-    let mut urls: Vec<TaskType> = Vec::new();
+    data.clear();
     for channel in feed_content.items() {
         let chapter_pub_date = DateTime::parse_from_rfc2822(channel.pub_date().unwrap()).unwrap();
         //if latest chapter date is newer
         if chapter_pub_date > last_update {
             //perform next task on url || return list of them?
-            urls.push(TaskType::from(channel.link().unwrap().to_string()));
+            data.push(TaskType::from(channel.link().unwrap().to_string()));
             //println!("pubDate: {:?}, Chapter: {}", chapter_pub_date, channel.title().unwrap());
         }
     }
-
-    urls
 }
 
-fn get(data: Vec<TaskType>, matchers: &str) -> Vec<TaskType> {
-    let mut filenames: Vec<TaskType> = Vec::new();
+fn get(data: &mut Vec<TaskType>, add: &mut Vec<TaskType>, matchers: &str) {
     let matcher = Regex::new(matchers).unwrap();
-
+    add.clear();
     for ttype in data {
         let link = ttype.clone().text().unwrap();
         let matched = matcher.find(&link).unwrap();
         let filename = link[matched.start()..].to_string();
-        filenames.push(TaskType::from(filename));
+        add.push(TaskType::from(filename));
     }
-
-    filenames
 }
 
-fn open(data: Vec<TaskType>) -> Vec<TaskType> {
-    let mut doms: Vec<TaskType> = Vec::new();
-
-    for link in data {
+fn open(data: &mut Vec<TaskType>) {
+    let cop = data.clone();
+    data.clear();
+    for link in cop {
         let dom = open_url(&link.text().unwrap()).unwrap();
         //println!("dom: {:?}", dom);
-        doms.push(TaskType::from(dom));
+        data.push(TaskType::from(dom));
     }
-
-    doms
 }
 
-fn file_format(data: Vec<TaskType>, selector: &str, output_concat: &str) -> Vec<TaskType> {
-    let mut chapters: Vec<TaskType> = Vec::new();
-
+fn file_format(data: &mut Vec<TaskType>, selector: &str, output_concat: &str) {
     let mut chapter = "".to_owned();
     let concat = output_concat.to_owned();
 
     let sel = Selector::parse(selector).unwrap();
+    let cop = data.clone();
+    data.clear();
 
-    for wdom in data {
-        let dom = wdom.clone().dom().unwrap();
+    for wdom in cop {
+        let dom = wdom.dom().unwrap();
         for chap in dom.select(&sel) {
             chapter.push_str(&chap.inner_html());
             chapter.push_str(&concat);
         }
-        chapters.push(TaskType::from(chapter.clone()));
+        data.push(TaskType::from(chapter.clone()));
         chapter.clear();
     }
-
-    chapters
 }
 
-fn write_chapter(output_path: &str, data: Vec<TaskType>, add: Vec<TaskType>) {
+fn write_chapter(output_path: &str, data: &mut Vec<TaskType>, add: &mut Vec<TaskType>) {
     //println!("add: {:?}", add);
 
     for info in data.iter().zip(add.iter()) {
@@ -267,9 +247,8 @@ fn write_chapter(output_path: &str, data: Vec<TaskType>, add: Vec<TaskType>) {
 fn main() {
     let conf: Config = read_config();
     for feed in &conf.feed {
-        let mut data: Vec<TaskType> =
-            vec![TaskType::Feed(Channel::from_url(&feed.feed_url).unwrap())];
-        let mut add: Option<Vec<TaskType>> = None;
+        let data = &mut vec![TaskType::Feed(Channel::from_url(&feed.feed_url).unwrap())];
+        let add = &mut Vec::new();
         let tracker = Rc::new(RefCell::new(&feed.tracker));
         let output_path = Rc::new(RefCell::new(&feed.output_path));
 
@@ -277,9 +256,7 @@ fn main() {
 
         for task in feed.task.clone() {
             //println!("task: {:?}", task);
-            let rsp = task.perform(&tracker.borrow(), &output_path.borrow(), data, add);
-            data = rsp.0;
-            add = rsp.1;
+            task.perform(&tracker.borrow(), &output_path.borrow(), data, add);
         }
     }
 }
