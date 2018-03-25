@@ -34,7 +34,7 @@ struct Feed {
 #[derive(Clone, Debug)]
 enum TaskType {
     Dom(Html),
-    Feed(rss::Channel),
+    Feed(Channel),
     Text(String),
 }
 
